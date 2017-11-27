@@ -1,0 +1,118 @@
+class Party(val name: CordaX500Name, owningKey: PublicKey) : AbstractParty(owningKey) {
+    constructor(certificate: X509Certificate)
+            : this(CordaX500Name.build(certificate.subjectX500Principal), Crypto.toSupportedPublicKey(certificate.publicKey))
+    override fun nameOrNull(): CordaX500Name = name
+    fun anonymise(): AnonymousParty = AnonymousParty(owningKey)
+    override fun ref(bytes: OpaqueBytes): PartyAndReference = PartyAndReference(this, bytes)
+    override fun toString() = name.toString()
+}
+
+class AnonymousParty(owningKey: PublicKey) : AbstractParty(owningKey) {
+    override fun nameOrNull(): CordaX500Name? = null
+    override fun ref(bytes: OpaqueBytes): PartyAndReference = PartyAndReference(this, bytes)
+    override fun toString() = "Anonymous(${owningKey.toStringShort()})"
+}
+
+
+altemos:
+
+IOUState
+data class IOUState(val value: Int,
+                    val lender: Party,
+                    val borrower: Party,
+                    val dueDate: Instant = Instant.now(),
+                    val paymentValue: Int = 0 ,
+                    val interest: Int = 0,
+                    val status: String = "Criado",
+                    override val linearId: UniqueIdentifier = UniqueIdentifier()):
+
+IOUContract
+override fun verify(tx: LedgerTransaction) {
+        val command = tx.commands.requireSingleCommand<Commands.Create>()
+        requireThat {
+            // Generic constraints around the IOU transaction.
+            "No inputs should be consumed when issuing an IOU." using (tx.inputs.isEmpty())
+            "Only one output state should be created." using (tx.outputs.size == 1)
+            val out = tx.outputsOfType<IOUState>().single()
+            "The lender and the borrower cannot be the same entity." using (out.lender != out.borrower)
+            "All of the participants must be signers." using (command.signers.containsAll(out.participants.map { it.owningKey }))
+
+            // IOU-specific constraints.
+            "The IOU's value must be non-negative." using (out.value > 0)
+
+            //novas regras de negocio
+            //status criado
+            "Status should be 'Criado'." using (out.status == "Criado")
+
+            // juros >= 0
+            "The interest value should be positive." using (out.interest >= 0)
+            // date > ontem
+            "The due date shouldn´t be in the past." using (Instant.now().minus(1, ChronoUnit.DAYS).isBefore(out.dueDate))
+            // payment value = 0
+            "shouldn´t be initialized." using (out.paymentValue == 0)
+
+        }
+    }
+					
+					
+		
+					data class = POJO
+tx: LedgerTransaction = transacao que pede uma solicitacao no ledger
+
+regras de negocio - tem que estar no metodo verify da classe IOUContract 
+
+
+assinatura - CA dentro da rede tem a chave privada para gerar a chave privada para todos neste no 
+
+input - antes de aplicar a regra
+output - depois de aplicar a regra
+
+
+10007
+{
+  "me" : "C=GB,L=London,O=PartyA"
+}
+
+10010
+{
+  "me" : "C=US,L=New York,O=PartyB"
+}
+
+{
+  "me" : "C=FR,L=Paris,O=PartyC"
+}
+
+criei um IOU para Paris de 10 - I own you
+
+Lender: C=US,L=New York,O=PartyB
+Borrower: C=FR,L=Paris,O=PartyC
+Value: 10
+
+
+Transaction id CA1695C695FE0FE944F2C9C117888C13049267B2ADC8A540585A2538390386BE committed to ledger.
+
+
+[ {
+  "state" : {
+    "data" : {
+      "value" : 50,
+      "lender" : "C=GB,L=London,O=PartyA",
+      "borrower" : "C=US,L=New York,O=PartyB",
+      "linearId" : {
+        "externalId" : null,
+        "id" : "19c3394f-7b05-4108-976f-8df0425d4ef8"
+      },
+      "participants" : [ "C=GB,L=London,O=PartyA", "C=US,L=New York,O=PartyB" ]
+    },
+    "contract" : "com.example.contract.IOUContract",
+    "notary" : "C=GB,L=London,O=Controller,CN=corda.notary.validating",
+    "encumbrance" : null,
+    "constraint" : {
+      "attachmentId" : "EE5910108A77F7AFCF6F24E1F19182889FAF70C3929A3603F331FFDD086064FB"
+    }
+  },
+  "ref" : {
+    "txhash" : "178FE604D03C448B5312A1D155952EAD000E567FCF4044AB95C2FBA59615A03E",
+    "index" : 0
+  }
+} ]
