@@ -67,6 +67,7 @@ assinatura - CA dentro da rede tem a chave privada para gerar a chave privada pa
 input - antes de aplicar a regra
 output - depois de aplicar a regra
 
+@StartableByRPC - para poder rodar por fora
 
 10007
 {
